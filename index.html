@@ -311,46 +311,41 @@
             };
 
             async function fetchQuestionFromAI(category) {
-            // سؤال احتياطي في حال فشل الاتصال فقط
-            const fallbackQuestion = { 
-                q: `اذكر 4 أشياء متعلقة بـ (${category}) (سؤال احتياطي لحدث خطأ في الاتصال)`, 
-                a: [ { display: 'إجابة 1', aliases: ['1'] }, { display: 'إجابة 2', aliases: ['2'] }, { display: 'إجابة 3', aliases: ['3'] }, { display: 'إجابة 4', aliases: ['4'] } ],
-                hint: 'تأكد من اتصالك بالإنترنت'
-            };
+    // سؤال احتياطي في حال فشل الـ API
+    const fallback = {
+        q: "ما هو الشيء الذي نضعه على المائدة ونقطعه ولا نأكله؟",
+        a: [
+            { display: "أوراق اللعب", aliases: ["بلوت", "ورق"] },
+            { display: "البطيخ", aliases: ["حبحب"] },
+            { display: "الخبز", aliases: ["تميس"] },
+            { display: "اللحم", aliases: ["ذبيحة"] }
+        ],
+        hint: "شيء يستخدم للتسلية"
+    };
 
-            // تم إزالة شرط الفحص المعطل للكود
-            
-            const promptText = `أنت صانع ألعاب مسابقات رمضانية عائلية ممتعة. أعطني سؤال واحد فقط في قسم "${category}".
-            يجب أن يكون السؤال يحتمل 4 إجابات مختلفة صحيحة (مثل لعبة فاميلي فيود / Family Feud).
-            يجب أن يكون الرد باللغة العربية، وبصيغة JSON صالحة (Valid JSON) فقط بدون أي نصوص أو شروحات إضافية، بهذا الشكل بالضبط:
-            {
-                "q": "نص السؤال هنا",
-                "a": [
-                    {"display": "الإجابة الأولى", "aliases": ["مرادف1"]},
-                    {"display": "الإجابة الثانية", "aliases": ["مرادف1"]},
-                    {"display": "الإجابة الثالثة", "aliases": ["مرادف1"]},
-                    {"display": "الإجابة الرابعة", "aliases": ["مرادف1"]}
-                ],
-                "hint": "تلميح عام للسؤال"
-            }`;
+    try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: `أعطني سؤال مسابقات عن ${category} بـ 4 إجابات بتنسيق JSON فقط: {"q":"السؤال","a":[{"display":"إجابة","aliases":["مرادف"]}],"hint":"تلميح"}` }] }]
+            })
+        });
 
-            try {
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
-                });
-                
-                const data = await response.json();
-                let rawText = data.candidates[0].content.parts[0].text;
-                rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-                return JSON.parse(rawText);
-
-            } catch (error) {
-                console.error("خطأ في جلب السؤال:", error);
-                return fallbackQuestion;
-            }
+        const data = await response.json();
+        
+        // فحص وجود بيانات صحيحة
+        if (data.candidates && data.candidates[0].content.parts[0].text) {
+            let rawText = data.candidates[0].content.parts[0].text;
+            const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) return JSON.parse(jsonMatch[0]);
         }
+        return fallback; // العودة للسؤال الاحتياطي إذا كانت البيانات ناقصة
+    } catch (e) {
+        console.error("خطأ:", e);
+        return fallback;
+    }
+}
 
             const promptText = `أنت صانع ألعاب مسابقات رمضانية عائلية ممتعة. أعطني سؤال واحد فقط في قسم "${category}".
             يجب أن يكون السؤال يحتمل 4 إجابات مختلفة صحيحة (مثل لعبة فاميلي فيود / Family Feud).
